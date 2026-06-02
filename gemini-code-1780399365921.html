@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GTK Question Generator</title>
+    <!-- PDF.js for reading uploaded PDFs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <!-- html2pdf.js for generating PDF output -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    
+    <style>
+        :root {
+            --primary-color: #5b4dff;
+            --border-color: #e0e0e0;
+            --text-main: #333;
+            --text-muted: #888;
+            --bg-light: #f9f9fc;
+            --success-color: #2e7d32;
+        }
+
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f5f7; display: flex; justify-content: center; padding: 40px 20px; margin: 0; color: var(--text-main); }
+        .container { background-color: #ffffff; width: 100%; max-width: 550px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.05); padding: 30px; }
+        .header-title { text-align: center; margin-top: 0; margin-bottom: 20px; font-size: 24px; color: var(--primary-color); }
+
+        /* API Key Section */
+        .api-section { background-color: #f0f4fe; border: 1px solid #d2ddfc; padding: 15px; border-radius: 8px; margin-bottom: 25px; }
+        .api-section label { display: block; font-weight: 600; margin-bottom: 8px; font-size: 14px; }
+        .api-wrapper { display: flex; gap: 10px; }
+        .api-section input { flex: 1; padding: 10px; border: 1px solid #ced4da; border-radius: 6px; font-family: monospace; outline: none; }
+        .save-btn { background-color: var(--success-color); color: white; border: none; padding: 0 15px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+        .api-section .help-text { font-size: 12px; margin-top: 8px; color: #555; }
+        .api-section .help-text a { color: var(--primary-color); text-decoration: none; font-weight: 600; }
+
+        /* Tabs & Inputs */
+        .tabs { display: flex; border-bottom: 2px solid var(--border-color); margin-bottom: 25px; }
+        .tab { flex: 1; text-align: center; padding: 12px 0; font-size: 16px; font-weight: 600; color: var(--text-muted); cursor: pointer; border: none; background: none; outline: none; }
+        .tab.active { color: var(--primary-color); border-bottom: 3px solid var(--primary-color); margin-bottom: -2px; }
+        .upload-box { border: 2px dashed var(--primary-color); border-radius: 12px; padding: 40px 20px; text-align: center; background-color: var(--bg-light); cursor: pointer; margin-bottom: 20px; }
+        .upload-box p { margin: 5px 0; font-size: 15px; color: var(--primary-color); font-weight: 500; }
+        .upload-box .sub-text { font-size: 13px; color: var(--text-muted); }
+        #topicInput { width: 100%; padding: 15px; border: 1px solid var(--border-color); border-radius: 8px; box-sizing: border-box; font-family: inherit; font-size: 15px; resize: vertical; margin-bottom: 25px; outline: none; }
+
+        /* Form Controls */
+        .form-row { display: flex; align-items: center; margin-bottom: 15px; justify-content: space-between; }
+        .form-row label { font-weight: 600; font-size: 15px; flex: 1; }
+        .form-row select, .form-row input[type="number"] { flex: 1.5; padding: 10px 15px; border: 1px solid var(--border-color); border-radius: 8px; background-color: white; font-size: 15px; outline: none; }
+        .page-range-inputs { display: flex; gap: 10px; flex: 1.5; }
+        .page-range-inputs input { width: 100%; text-align: center; }
+
+        optgroup { font-weight: bold; color: var(--primary-color); font-style: normal; }
+        optgroup option { color: var(--text-main); font-weight: normal; }
+
+        /* Buttons & Actions */
+        .generate-btn { width: 100%; background-color: var(--primary-color); color: white; border: none; padding: 15px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-top: 20px; }
+        .generate-btn:disabled { background-color: #a09df0; cursor: not-allowed; }
+        
+        .action-bar { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; display: none; }
+        .action-btn { flex: 1; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; background-color: #fff; cursor: pointer; font-weight: 600; font-size: 14px; text-align: center; }
+        .action-btn:hover { background-color: var(--bg-light); }
+        .pdf-btn { background-color: #e53935; color: white; border: none; flex: 2; }
+        .pdf-btn:hover { background-color: #c62828; }
+
+        /* Results Area & Layout Classes */
+        #outputArea { margin-top: 20px; padding: 20px; background: #fff; border-radius: 8px; border: 1px solid var(--border-color); display: none; line-height: 1.6; max-height: 500px; overflow-y: auto; color: black; }
+        
+        .two-column {
+            column-count: 2;
+            column-gap: 30px;
+            font-size: 10pt; /* Space-saving font size */
+        }
+        
+        .single-column {
+            column-count: 1;
+            font-size: 12pt; /* Standard readable font size */
+        }
+
+        /* Loading Indicator */
+        .spinner { display: none; text-align: center; margin: 20px 0; font-weight: 600; color: var(--primary-color); animation: pulse 1.5s infinite ease-in-out; }
+        @keyframes pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2 class="header-title">GTK Question Generator</h2>
+        
+        <div class="api-section">
+            <label for="apiKey">Groq API Key</label>
+            <div class="api-wrapper">
+                <input type="password" id="apiKey" placeholder="gsk_..." autocomplete="off">
+                <button class="save-btn" onclick="saveKey()">Save</button>
+            </div>
+            <div class="help-text">
+                Keys stay stored locally in your browser. <a href="https://console.groq.com/keys" target="_blank">Get a free key here</a>.
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('upload', this)">Upload Document</button>
+            <button class="tab" onclick="switchTab('topic', this)">Enter Topic Text</button>
+        </div>
+
+        <div id="uploadSection" class="tab-content active">
+            <div class="upload-box" id="dropZone">
+                <span style="font-size: 24px; color: var(--primary-color);">📄</span>
+                <p>Drag & drop PDF or TXT here, or click to browse</p>
+                <input type="file" id="fileInput" accept=".txt,.pdf" hidden>
+            </div>
+            <div id="fileList" style="font-size: 13px; color: var(--success-color); margin-bottom: 20px; text-align: center; font-weight: 600;"></div>
+            
+            <div class="form-row" id="pageRangeRow" style="display: none; background: #f0f4fe; padding: 10px; border-radius: 8px;">
+                <label style="color: var(--primary-color);">Extract Pages:</label>
+                <div class="page-range-inputs">
+                    <input type="number" id="startPage" placeholder="From" min="1">
+                    <input type="number" id="endPage" placeholder="To" min="1">
+                </div>
+            </div>
+        </div>
+
+        <div id="topicSection" class="tab-content">
+            <textarea id="topicInput" rows="6" placeholder="Type or paste context material here..."></textarea>
+        </div>
+
+        <!-- NEW: Print Layout Toggle -->
+        <div class="form-row" style="margin-top: 15px;">
+            <label>Print Layout:</label>
+            <select id="layout">
+                <option value="single">Single Column (12pt)</option>
+                <option value="double" selected>Two Columns (10pt, Save Paper)</option>
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label>Output Language:</label>
+            <select id="language"><option value="English" selected>English</option><option value="Tamil">Tamil (தமிழ்)</option></select>
+        </div>
+        <div class="form-row"><label>Grade:</label><select id="grade"><option value="1">Class 1</option><option value="2">Class 2</option><option value="3">Class 3</option><option value="4">Class 4</option><option value="5">Class 5</option><option value="6">Class 6</option><option value="7">Class 7</option><option value="8">Class 8</option><option value="9">Class 9</option><option value="10" selected>Class 10</option><option value="11">Class 11</option><option value="12">Class 12</option></select></div>
+        
+        <div class="form-row">
+            <label>Subject:</label>
+            <select id="subject">
+                <optgroup label="Languages"><option value="Tamil">Tamil</option><option value="English" selected>English</option></optgroup>
+                <optgroup label="Core (Classes 1-10)"><option value="Mathematics">Mathematics</option><option value="Science">Science</option><option value="Social Science">Social Science</option><option value="Environmental Science (EVS)">Environmental Science (EVS)</option></optgroup>
+                <optgroup label="Higher Secondary - Science"><option value="Physics">Physics</option><option value="Chemistry">Chemistry</option><option value="Biology">Biology</option><option value="Botany">Botany</option><option value="Zoology">Zoology</option><option value="Computer Science">Computer Science</option></optgroup>
+                <optgroup label="Higher Secondary - Commerce & Arts"><option value="Commerce">Commerce</option><option value="Accountancy">Accountancy</option><option value="Economics">Economics</option><option value="Business Mathematics">Business Mathematics</option><option value="Computer Applications">Computer Applications</option><option value="History">History</option><option value="Geography">Geography</option><option value="Political Science">Political Science</option></optgroup>
+            </select>
+        </div>
+
+        <div class="form-row"><label>Questions:</label><select id="questionCount"><option value="5">5</option><option value="10" selected>10</option><option value="15">15</option><option value="20">20</option></select></div>
+        <div class="form-row"><label>Difficulty:</label><select id="difficulty"><option value="Easy">Easy</option><option value="Medium" selected>Medium</option><option value="Hard">Hard</option></select></div>
+        <div class="form-row"><label>Category:</label><select id="category"><option value="Multiple Choice" selected>Multiple Choice</option><option value="Short Answer">Short Answer</option><option value="True/False">True / False</option><option value="Essay">Essay</option></select></div>
+
+        <button class="generate-btn" onclick="generateQuestions()">Generate Questions</button>
+        <div class="spinner" id="loadingStatus">Processing data and generating quiz layout...</div>
+        
+        <!-- Output Block -->
+        <div id="outputArea"></div>
+        
+        <!-- Action Bar -->
+        <div class="action-bar" id="actionBar">
+            <button class="action-btn" onclick="copyToClipboard()">📋 Copy</button>
+            <button class="action-btn" onclick="downloadAsFile()">💾 TXT</button>
+            <button class="action-btn pdf-btn" onclick="downloadAsPDF()">📄 Download PDF</button>
+        </div>
+    </div>
+
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+        
+        let extractedTextContext = "";
+        let loadedPdfDoc = null; 
+
+        window.onload = function() {
+            const savedKey = localStorage.getItem('groq_api_key');
+            if (savedKey) document.getElementById('apiKey').value = savedKey;
+        };
+
+        function saveKey() {
+            localStorage.setItem('groq_api_key', document.getElementById('apiKey').value.trim());
+            alert("API Key saved securely!");
+        }
+
+        function switchTab(tabId, element) {
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById(tabId + 'Section').classList.add('active');
+            element.classList.add('active');
+        }
+
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileList = document.getElementById('fileList');
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.backgroundColor = '#f0efff'; });
+        dropZone.addEventListener('dragleave', () => dropZone.style.backgroundColor = 'var(--bg-light)');
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault(); dropZone.style.backgroundColor = 'var(--bg-light)';
+            if (e.dataTransfer.files.length) { fileInput.files = e.dataTransfer.files; handleFileProcessing(); }
+        });
+        fileInput.addEventListener('change', handleFileProcessing);
+
+        async function handleFileProcessing() {
+            if (!fileInput.files.length) return;
+            const file = fileInput.files[0];
+            fileList.style.color = "orange";
+            fileList.innerText = `Loading "${file.name}"...`;
+            document.getElementById('pageRangeRow').style.display = 'none';
+
+            try {
+                if (file.type === "application/pdf" || file.name.endsWith('.pdf')) {
+                    const arrayBuffer = await file.arrayBuffer();
+                    loadedPdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    
+                    fileList.style.color = "var(--success-color)";
+                    fileList.innerText = `Successfully loaded: ${file.name} (Total Pages: ${loadedPdfDoc.numPages})`;
+                    
+                    document.getElementById('pageRangeRow').style.display = 'flex';
+                    document.getElementById('startPage').max = loadedPdfDoc.numPages;
+                    document.getElementById('endPage').max = loadedPdfDoc.numPages;
+                    document.getElementById('startPage').value = 1;
+                    document.getElementById('endPage').value = Math.min(5, loadedPdfDoc.numPages); 
+                    
+                    extractedTextContext = ""; 
+                } else {
+                    loadedPdfDoc = null;
+                    extractedTextContext = await file.text();
+                    fileList.style.color = "var(--success-color)";
+                    fileList.innerText = `Successfully loaded text file: ${file.name}`;
+                }
+            } catch (err) {
+                fileList.style.color = "red";
+                fileList.innerText = "Error reading file data.";
+            }
+        }
+
+        async function generateQuestions() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            if (!apiKey) return alert("Please specify your Groq API Key first.");
+
+            const isUpload = document.getElementById('uploadSection').classList.contains('active');
+            let finalContext = "";
+            
+            const btn = document.querySelector('.generate-btn');
+            const spinner = document.getElementById('loadingStatus');
+            const output = document.getElementById('outputArea');
+            const actions = document.getElementById('actionBar');
+
+            if (isUpload) {
+                if (loadedPdfDoc) {
+                    let start = parseInt(document.getElementById('startPage').value) || 1;
+                    let end = parseInt(document.getElementById('endPage').value) || loadedPdfDoc.numPages;
+                    
+                    if (start < 1) start = 1;
+                    if (end > loadedPdfDoc.numPages) end = loadedPdfDoc.numPages;
+                    if (start > end) return alert("Start page cannot be greater than end page.");
+                    
+                    if ((end - start) > 15) {
+                        if(!confirm("You are extracting more than 15 pages. This may exceed the AI token limit and fail. Do you want to try anyway?")) return;
+                    }
+
+                    spinner.style.display = 'block';
+                    spinner.innerText = `Extracting text from pages ${start} to ${end}...`;
+                    btn.disabled = true;
+
+                    let parsedText = "";
+                    for (let i = start; i <= end; i++) {
+                        const page = await loadedPdfDoc.getPage(i);
+                        const content = await page.getTextContent();
+                        parsedText += content.items.map(item => item.str).join(" ") + "\n";
+                    }
+                    finalContext = parsedText;
+                } else if (extractedTextContext) {
+                    finalContext = extractedTextContext;
+                } else {
+                    return alert("Please upload a file or switch to 'Enter Topic Text'.");
+                }
+            } else {
+                finalContext = document.getElementById('topicInput').value.trim();
+                if (!finalContext) return alert("Please enter topic material.");
+            }
+
+            const language = document.getElementById('language').value;
+            const grade = document.getElementById('grade').value;
+            const subject = document.getElementById('subject').value;
+            const qCount = document.getElementById('questionCount').value;
+            const diff = document.getElementById('difficulty').value;
+            const cat = document.getElementById('category').value;
+            const layout = document.getElementById('layout').value;
+            const layoutClass = layout === 'double' ? 'two-column' : 'single-column';
+
+            const prompt = `You are the GTK Question Generator, a specialized AI assistant designed for teachers. Your sole purpose is to help educators generate high-quality, relevant test and examination questions.
+
+TASK: Generate exactly ${qCount} questions.
+Class/Grade: Class ${grade}
+Subject: ${subject}
+Difficulty Level: ${diff}
+Question Category: ${cat}
+OUTPUT LANGUAGE: ${language}. You MUST generate the entire response strictly in ${language}.
+
+GENERATION RULES:
+1. Refer to Tamil Nadu State Board Textbooks for context standard.
+2. Carefully analyze the text provided below. Only generate questions directly related to that context.
+3. If Multiple Choice is selected, provide 4 distinct options (A, B, C, D) and clearly indicate the correct answer at the bottom of the response.
+4. At the very end of the test, provide the Answer Key or evaluation guide.
+5. CRITICAL INSTRUCTION: You MUST insert the exact text [PAGE_BREAK] on a new line immediately before the Answer Key. This ensures answers are printed on a separate paper.
+6. Maintain a clean format. Do not include any default AI footers or conversational text.
+
+SOURCE MATERIAL:
+---
+${finalContext}
+---`;
+
+            spinner.innerText = "Connecting to Groq AI server...";
+            btn.disabled = true;
+            spinner.style.display = 'block';
+            output.style.display = 'none';
+            actions.style.display = 'none';
+
+            try {
+                const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+                    body: JSON.stringify({
+                        model: "llama-3.3-70b-versatile",
+                        messages: [
+                            { role: "system", content: "You are the GTK Question Generator, a specialized AI assistant designed for teachers." },
+                            { role: "user", content: prompt }
+                        ],
+                        temperature: 0.3
+                    })
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.error?.message || "Token limit exceeded or API error occurred.");
+                }
+
+                const resData = await response.json();
+                const rawText = resData.choices[0].message.content;
+                
+                output.setAttribute('data-raw-text', rawText);
+
+                // Split the output based on the AI's page break tag. 
+                // Fallback to "Answer Key" if the AI missed the exact tag.
+                let parts = rawText.split(/\[PAGE_?BREAK\]/i);
+                if (parts.length === 1) {
+                    const akMatch = rawText.match(/\n(?:\*\*?)?(?:Answer Key|Answers|Evaluation Guide)(?:\*\*?)?/i);
+                    if (akMatch) {
+                        const splitIdx = akMatch.index;
+                        parts = [rawText.substring(0, splitIdx), rawText.substring(splitIdx).trim()];
+                    }
+                }
+
+                let formattedHtml = "";
+                parts.forEach((part, index) => {
+                    let blocks = part.trim().split('\n\n').filter(b => b.trim() !== '');
+                    let formattedPart = blocks.map(b => `<div style="page-break-inside: avoid; margin-bottom: 12px;">${b.replace(/\n/g, '<br>')}</div>`).join('');
+                    
+                    // Force page break between Questions and Answers
+                    let pageBreakStyle = index > 0 ? 'page-break-before: always; margin-top: 20px;' : '';
+                    formattedHtml += `<div class="${layoutClass}" style="${pageBreakStyle}">${formattedPart}</div>`;
+                });
+
+                output.innerHTML = formattedHtml;
+                output.style.display = 'block';
+                actions.style.display = 'flex';
+            } catch (err) {
+                alert("Error: " + err.message);
+            } finally {
+                btn.disabled = false;
+                spinner.style.display = 'none';
+            }
+        }
+
+        function copyToClipboard() {
+            let text = document.getElementById('outputArea').getAttribute('data-raw-text') || document.getElementById('outputArea').innerText;
+            text = text.replace(/\[PAGE_?BREAK\]/ig, '\n\n--- Answer Key ---\n\n');
+            navigator.clipboard.writeText(text);
+            alert("Questions copied to clipboard!");
+        }
+
+        function downloadAsFile() {
+            let text = document.getElementById('outputArea').getAttribute('data-raw-text') || document.getElementById('outputArea').innerText;
+            text = text.replace(/\[PAGE_?BREAK\]/ig, '\n\n--- Answer Key ---\n\n');
+            const blob = new Blob(["\ufeff" + text], { type: 'text/plain;charset=utf-8' });
+            const link = document.createElement('a');
+            link.download = `GTK_Questions_Class${document.getElementById('grade').value}_${document.getElementById('subject').value}.txt`;
+            link.href = window.URL.createObjectURL(blob);
+            link.click();
+        }
+
+        function downloadAsPDF() {
+            const element = document.getElementById('outputArea');
+            const grade = document.getElementById('grade').value;
+            const subject = document.getElementById('subject').value;
+            
+            const opt = {
+                margin:       [0.5, 0.5, 0.5, 0.5],
+                filename:     `GTK_Questions_Class${grade}_${subject.replace(/[^a-z0-9]/gi, '_')}.pdf`,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true, scrollY: 0 },
+                jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' },
+                pagebreak:    { mode: ['css', 'legacy'] } // Strictly forces our page-break-before styling
+            };
+
+            const originalMaxHeight = element.style.maxHeight;
+            const originalOverflow = element.style.overflowY;
+            const originalBorder = element.style.border;
+            const originalPadding = element.style.padding;
+            
+            // Expand the element so html2pdf can capture the whole height
+            element.style.maxHeight = 'none';
+            element.style.overflowY = 'visible';
+            element.style.border = 'none';
+            element.style.padding = '0px';
+
+            html2pdf().set(opt).from(element).save().then(() => {
+                element.style.maxHeight = originalMaxHeight;
+                element.style.overflowY = originalOverflow;
+                element.style.border = originalBorder;
+                element.style.padding = originalPadding;
+            });
+        }
+    </script>
+</body>
+</html>
